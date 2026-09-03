@@ -1,7 +1,7 @@
 <p align="center">
   <a href="https://github.com/AnkushD919/floci-go">
-    <img src="https://raw.githubusercontent.com/floci-io/floci/main/docs/assets/floci-black.svg#gh-light-mode-only" alt="floci-go" width="450" />
-    <img src="https://raw.githubusercontent.com/floci-io/floci/main/docs/assets/floci-white.svg#gh-dark-mode-only" alt="floci-go" width="450" />
+    <img src="docs/assets/floci-black.svg#gh-light-mode-only" alt="floci-go" width="450" />
+    <img src="docs/assets/floci-white.svg#gh-dark-mode-only" alt="floci-go" width="450" />
   </a>
 </p>
 
@@ -12,9 +12,14 @@
 </p>
 
 <p align="center">
+  <em>Re-engineered in Pure Go from the original <a href="https://github.com/floci-io/floci">floci-io/floci</a> Java project.</em>
+</p>
+
+<p align="center">
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white" alt="Go Version" /></a>
   <a href="https://github.com/AnkushD919/floci-go/releases"><img src="https://img.shields.io/badge/release-v0.0.1-brightgreen.svg" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="https://github.com/floci-io/floci"><img src="https://img.shields.io/badge/Original%20Repo-floci--io%2Ffloci-orange?style=flat&logo=github" alt="Original Floci Repo" /></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/docker-~12.3MB-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker Size" /></a>
 </p>
 
@@ -446,6 +451,12 @@ Contributions are welcome! To add or extend a service:
    ```bash
    go test -v ./...
    ```
+
+---
+
+## 💡 Acknowledgments & Origins
+
+`floci-go` is built as a pure Go reimplementation inspired by the design and architectural goals of [**Floci**](https://github.com/floci-io/floci) (`floci-io/floci`). Special thanks to the original Floci team for pioneering the developer-first, zero-paywall AWS emulator movement.
 
 ---
 
