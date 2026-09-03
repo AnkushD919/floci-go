@@ -26,28 +26,84 @@
 
 ---
 
-## 📦 Supported AWS Services
+## 📦 Supported AWS Services & Features
 
 `floci-go` focuses on **execution depth** across the core serverless and modern application stack:
 
-* **Compute & Gateway**:
-  * **AWS Lambda**: Docker container execution via AWS Runtime Interface Emulator (RIE), warm container reuse, automatic unzipping, dynamic host port binding.
-  * **API Gateway v2 (HTTP API)**: Route matching, proxy integrations, and payload v2.0 conversion.
-  * **EventBridge**: Rule pattern matching, scheduled rules (`rate(...)`), and target dispatching to Lambda & SQS.
-* **Database & Orchestration**:
-  * **RDS & RDS Data API**: Embedded pure-Go SQLite (`modernc.org/sqlite`) for real SQL execution (`CREATE TABLE`, `INSERT`, `SELECT`, `JOIN`) without external database containers.
-  * **DynamoDB**: In-memory document store supporting CRUD, Query, Scan, and expressions.
-  * **Step Functions**: Real Amazon States Language (ASL) execution engine supporting `Pass`, `Task` (invoking Lambdas), `Succeed`, and `Fail` transitions.
-* **Auth, Security & Identity**:
-  * **Cognito IDP**: User pools, user management, and authentication issuing standard HMAC-SHA256 JWT tokens.
-  * **IAM & STS**: AssumeRole, GetCallerIdentity, and IAM role management.
-  * **KMS**: Key creation, encrypt/decrypt operations, and data key generation.
-  * **Secrets Manager & SSM Parameter Store**: Secure key/value retrieval and path hierarchies.
-* **Storage & Messaging**:
-  * **S3**: Bucket management, object CRUD, pre-signed URLs, and multipart uploads.
-  * **SQS & SNS**: Message queues, dead-letter support, topic publishing, and cross-service SNS-to-SQS fanout.
-* **Observability**:
-  * **CloudWatch Logs & Metrics**: Log groups, log streams, metric ingestion, and basic statistical aggregation.
+### 1. Compute & Gateway
+* **AWS Lambda**:
+  * Docker-backed container execution via AWS Runtime Interface Emulator (RIE).
+  * Supports Node.js, Python, Go, Java, and custom runtimes.
+  * Warm container caching / SnapStart-style container reuse.
+  * Automated `.zip` unzipping into host task mounts & dynamic port allocation.
+  * Non-invasive TCP port readiness probes (`net.DialTimeout`).
+  * *Operations*: `CreateFunction`, `InvokeFunction`, `UpdateFunctionCode`, `ListFunctions`, `GetFunction`, `DeleteFunction`.
+* **API Gateway v2 (HTTP API)**:
+  * Route matching (e.g., `GET /users`, `POST /orders/{id}`).
+  * Payload format version 2.0 translation.
+  * Direct invocation forwarding to Lambda functions.
+  * *Operations*: `CreateApi`, `CreateRoute`, `CreateIntegration`, `CreateStage`.
+* **Amazon EventBridge**:
+  * Custom & default event buses with `PutEvents`.
+  * JSON Pattern matching engine (`source`, `detail-type`, and `detail` payload matching).
+  * Background ticker goroutine supporting scheduled rules with `rate(...)` expressions.
+  * Target dispatching to Lambda functions and SQS queues.
+  * *Operations*: `PutEvents`, `PutRule`, `PutTargets`, `RemoveTargets`, `DeleteRule`, `DescribeRule`.
+
+### 2. Database & Orchestration
+* **Amazon RDS & RDS Data API** *(LocalStack Pro feature, free here)*:
+  * Embedded **pure-Go SQLite** backend (`modernc.org/sqlite` — zero CGO, zero external Postgres/MySQL installs).
+  * Real SQL execution (`CREATE TABLE`, `INSERT`, `SELECT`, `UPDATE`, `DELETE`, `JOIN`).
+  * Named parameter binding (`:param`).
+  * *Operations*: `CreateDBInstance`, `DescribeDBInstances`, `DeleteDBInstance`, `ExecuteStatement`.
+* **AWS Step Functions** *(LocalStack Pro feature, free here)*:
+  * In-process Amazon States Language (ASL) execution engine.
+  * State transitions: `Pass`, `Task` (invoking Lambda functions), `Succeed`, and `Fail`.
+  * Cycle-safe execution loop (1,000 step ceiling).
+  * *Operations*: `CreateStateMachine`, `DescribeStateMachine`, `StartExecution`, `DescribeExecution`, `StopExecution`, `ListStateMachines`.
+* **Amazon DynamoDB**:
+  * In-memory NoSQL engine (no Java `dynamodb-local` container needed).
+  * HASH and composite HASH+RANGE primary key indexing.
+  * Key Condition Expressions for Query and Scan operations.
+  * *Operations*: `CreateTable`, `DescribeTable`, `ListTables`, `DeleteTable`, `PutItem`, `GetItem`, `DeleteItem`, `Scan`, `Query`.
+
+### 3. Auth, Security & Identity
+* **Amazon Cognito IDP** *(LocalStack Pro feature, free here)*:
+  * User Pools and user management.
+  * `InitiateAuth` password flow issuing standard **HS256 HMAC JWTs** with valid claims (`sub`, `iss`, `exp`).
+  * Constant-time password comparison (`subtle.ConstantTimeCompare`) preventing timing attacks.
+  * Token expiration validation.
+  * *Operations*: `CreateUserPool`, `DescribeUserPool`, `DeleteUserPool`, `AdminCreateUser`, `AdminSetUserPassword`, `InitiateAuth`, `GetUser`.
+* **AWS STS**:
+  * *Operations*: `GetCallerIdentity` (returns account `000000000000`), `AssumeRole`.
+* **AWS IAM**:
+  * Role creation with AssumeRolePolicyDocument.
+  * *Operations*: `CreateRole`, `GetRole`, `ListRoles`, `DeleteRole`.
+* **AWS KMS**:
+  * CMK creation, describe, and list.
+  * Data key generation (`GenerateDataKey`) with cryptographically secure random bytes.
+  * *Operations*: `CreateKey`, `DescribeKey`, `ListKeys`, `Encrypt`, `Decrypt`, `GenerateDataKey`.
+* **AWS Secrets Manager & SSM Parameter Store**:
+  * String secrets and parameter hierarchy storage (`GetParametersByPath`).
+  * *Operations*: `CreateSecret`, `GetSecretValue`, `PutSecretValue`, `DeleteSecret`, `PutParameter`, `GetParameter`, `GetParametersByPath`, `DeleteParameter`.
+
+### 4. Storage, Messaging & Observability
+* **Amazon S3**:
+  * Path-style (`/bucket/key`) and virtual-host addressing.
+  * Multipart upload lifecycle (`CreateMultipartUpload`, `UploadPart`, `CompleteMultipartUpload`, `AbortMultipartUpload`).
+  * *Operations*: `CreateBucket`, `ListBuckets`, `DeleteBucket`, `PutObject`, `GetObject`, `DeleteObject`, `HeadObject`.
+* **Amazon SQS & SNS**:
+  * Standard queues, message batching, visibility timeouts, and queue purging.
+  * Topic publishing and cross-service fanout to SQS subscribers.
+  * *Operations*: `CreateQueue`, `SendMessage`, `ReceiveMessage`, `DeleteMessage`, `CreateTopic`, `Publish`, `Subscribe`.
+* **Amazon CloudWatch**:
+  * Log Groups & Streams ingestion (`PutLogEvents`) and querying (`GetLogEvents`, `FilterLogEvents`).
+  * Metric submission (`PutMetricData`) and statistical aggregation (`GetMetricStatistics`).
+
+### 5. Embedded Web Console Dashboard
+* Served natively on `http://localhost:4566/` (exact same port as API endpoints).
+* Interactive dark-mode dashboard for real-time resource inspection across all 16 services.
+* Zero external web servers or static assets required (compiled via Go `embed.FS`).
 
 ---
 
