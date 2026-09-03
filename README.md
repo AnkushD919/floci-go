@@ -2,10 +2,10 @@
 
 > **A sub-10ms, ultra-lightweight AWS emulator in pure Go — with built-in Web Console, Cognito JWTs, Step Functions, and SQLite RDS.**
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/AnkushD919/floci-go)](https://goreportcard.com/report/github.com/AnkushD919/floci-go)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white)](go.mod)
+[![Release](https://img.shields.io/badge/release-v0.0.1-brightgreen.svg)](https://github.com/AnkushD919/floci-go/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/AnkushD919/floci-go)](go.mod)
-[![Docker Image](https://img.shields.io/badge/docker-~25MB-blue.svg)](#docker)
+[![Docker Size](https://img.shields.io/badge/docker-~12.3MB-2496ED?style=flat&logo=docker&logoColor=white)](#quick-start)
 
 `floci-go` is designed for developers who want **instant local development and lightning-fast CI/CD runs** without the 1.5 GB RAM footprint, 45-second boot times, or paywalled features of traditional emulators.
 
