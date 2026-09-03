@@ -19,16 +19,20 @@
 </p>
 
 <p align="center">
-  <a href="#-why-floci-go">Why floci-go?</a> ·
-  <a href="#-quick-start">Quick Start</a> ·
-  <a href="#-supported-aws-services--features">Services</a> ·
-  <a href="#%EF%B8%8F-usage-with-aws-cli--sdks">SDKs & CLI</a> ·
-  <a href="#-architecture--extensibility">Architecture</a> ·
-  <a href="#-cicd-integration-github-actions">CI/CD</a>
+  <a href="#why-floci-go">Why floci-go?</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#services">Services</a> ·
+  <a href="#usage">SDKs & CLI</a> ·
+  <a href="#terraform">Terraform</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#cicd">CI/CD</a> ·
+  <a href="#migration">LocalStack Switch</a>
 </p>
 
 ---
 
+<a id="why-floci-go"></a>
 ## 🚀 Why floci-go?
 
 | Feature | LocalStack (Python) | Kumo (Go) | Original Floci (Java) | **floci-go (Pure Go)** |
@@ -44,6 +48,67 @@
 
 ---
 
+<a id="quick-start"></a>
+## ⚡ Quick Start
+
+### 1. Run via Go CLI
+```bash
+git clone https://github.com/AnkushD919/floci-go.git
+cd floci-go
+go run ./cmd/floci
+```
+
+### 2. Run via Docker
+```bash
+docker run -p 4566:4566 ankush919/floci-go:latest
+```
+
+<details>
+<summary><strong>🐳 Run with Docker Compose (click to expand)</strong></summary>
+
+```yaml
+# compose.yaml
+services:
+  floci:
+    image: ankush919/floci-go:latest
+    container_name: floci
+    ports:
+      - "4566:4566"
+    environment:
+      - FLOCI_STORAGE=memory
+      - FLOCI_LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_floci/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+```
+</details>
+
+### 3. Open the Built-in Console
+Open your browser to:
+```
+http://localhost:4566/
+```
+The modern dark-mode console is served on the **exact same port** (`:4566`) as the API endpoints. No secondary port, no CORS configuration required.
+
+---
+
+<a id="configuration"></a>
+## ⚙️ Configuration
+
+`floci-go` requires zero configuration to start, but can be customized via environment variables:
+
+| Environment Variable | Default | Description |
+| :--- | :--- | :--- |
+| `FLOCI_PORT` | `4566` | Primary HTTP port for AWS API requests and Web Console |
+| `FLOCI_STORAGE` | `memory` | Backend storage engine (`memory` or `sqlite`) |
+| `FLOCI_LOG_LEVEL` | `info` | Logging verbosity (`debug`, `info`, `warn`, `error`) |
+| `FLOCI_DATA_DIR` | `./data` | Directory for persistent state when using SQLite mode |
+
+---
+
+<a id="services"></a>
 ## 📦 Supported AWS Services & Features
 
 `floci-go` focuses on **execution depth** across the core serverless and modern application stack:
@@ -125,51 +190,52 @@
 
 ---
 
-## ⚡ Quick Start
-
-### 1. Run via Go CLI
-```bash
-git clone https://github.com/AnkushD919/floci-go.git
-cd floci-go
-go run ./cmd/floci
-```
-
-### 2. Run via Docker
-```bash
-docker run -p 4566:4566 ankush919/floci-go:latest
-```
-
-### 3. Open the Built-in Console
-Open your browser to:
-```
-http://localhost:4566/
-```
-The modern dark-mode console is served on the **exact same port** (`:4566`) as the API endpoints. No secondary port, no CORS configuration required.
-
----
-
+<a id="usage"></a>
 ## 🛠️ Usage with AWS CLI & SDKs
 
-Point standard AWS tools to `http://localhost:4566`:
+### 🌐 Global Environment Variable (Recommended)
+Set `AWS_ENDPOINT_URL` once to automatically route **all** AWS CLI v2 and modern SDK operations to `floci-go` without adding `--endpoint-url` to every command:
 
-### AWS CLI
 ```bash
-# Create an S3 Bucket & upload an object
+export AWS_ENDPOINT_URL=http://localhost:4566
+export AWS_DEFAULT_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+
+# Now AWS CLI commands automatically talk to floci-go:
+aws s3 ls
+```
+
+### AWS CLI Examples
+```bash
+# 1. S3 - Create Bucket & Upload Object
 aws --endpoint-url=http://localhost:4566 s3 mb s3://my-bucket
 aws --endpoint-url=http://localhost:4566 s3 cp app.zip s3://my-bucket/app.zip
 
-# Create a DynamoDB table
+# 2. DynamoDB - Create Table
 aws --endpoint-url=http://localhost:4566 dynamodb create-table \
     --table-name Users \
     --attribute-definitions AttributeName=UserId,AttributeType=S \
     --key-schema AttributeName=UserId,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST
 
-# Execute SQL via RDS Data API
+# 3. RDS Data API - Execute SQL on Embedded SQLite
 aws --endpoint-url=http://localhost:4566 rds-data execute-statement \
     --resource-arn "arn:aws:rds:us-east-1:000000000000:cluster:mydb" \
     --secret-arn "arn:aws:secretsmanager:us-east-1:000000000000:secret:mysecret" \
     --sql "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO users (name) VALUES ('Alice'); SELECT * FROM users;"
+
+# 4. Lambda - Invoke Function
+aws --endpoint-url=http://localhost:4566 lambda invoke \
+    --function-name my-function \
+    --payload '{"key": "value"}' \
+    response.json
+
+# 5. Cognito IDP - Authenticate User & Issue JWT
+aws --endpoint-url=http://localhost:4566 cognito-idp initiate-auth \
+    --auth-flow USER_PASSWORD_AUTH \
+    --client-id mock-client-id \
+    --auth-parameters USERNAME=admin,PASSWORD=secret
 ```
 
 ### AWS SDK v2 (Go)
@@ -207,8 +273,57 @@ s3 = boto3.client(
 )
 ```
 
+### Node.js (AWS SDK v3)
+```javascript
+import { S3Client, ListBucketsCommand } from "@aws-sdk/client-s3";
+
+const s3 = new S3Client({
+  endpoint: "http://localhost:4566",
+  region: "us-east-1",
+  credentials: { accessKeyId: "test", secretAccessKey: "test" },
+});
+
+const response = await s3.send(new ListBucketsCommand({}));
+console.log(response.Buckets);
+```
+
 ---
 
+<a id="terraform"></a>
+## 🏗️ Terraform & OpenTofu
+
+Provision infrastructure locally against `floci-go` using standard Terraform or OpenTofu provider configurations:
+
+```hcl
+# main.tf
+provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "test"
+  secret_key                  = "test"
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+
+  endpoints {
+    s3           = "http://localhost:4566"
+    dynamodb     = "http://localhost:4566"
+    lambda       = "http://localhost:4566"
+    apigatewayv2 = "http://localhost:4566"
+    sqs          = "http://localhost:4566"
+    sns          = "http://localhost:4566"
+    sts          = "http://localhost:4566"
+    iam          = "http://localhost:4566"
+  }
+}
+
+resource "aws_s3_bucket" "b" {
+  bucket = "local-test-bucket"
+}
+```
+
+---
+
+<a id="cicd"></a>
 ## 🧪 CI/CD Integration (GitHub Actions)
 
 Speed up your automated integration test workflows by replacing heavy emulator containers with `floci-go`:
@@ -224,7 +339,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25'
 
       - name: Start floci-go
         run: |
@@ -243,6 +358,32 @@ jobs:
 
 ---
 
+<a id="migration"></a>
+## 🔄 Migrating from LocalStack
+
+Replacing LocalStack with `floci-go` requires **zero code changes** in your application:
+
+```yaml
+# BEFORE: LocalStack (1.5 GB RAM, ~45s boot, requires API key for Pro features)
+services:
+  aws:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
+
+# AFTER: floci-go (~18 MB RAM, < 10ms boot, Cognito/RDS/StepFunctions unlocked for free)
+services:
+  aws:
+    image: ankush919/floci-go:latest
+    ports:
+      - "4566:4566"
+```
+
+---
+
+<a id="architecture"></a>
 ## 🏛️ Architecture & Extensibility
 
 ```mermaid
