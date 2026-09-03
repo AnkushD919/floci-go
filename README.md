@@ -1,13 +1,31 @@
-# floci-go ⚡
+<p align="center">
+  <a href="https://github.com/AnkushD919/floci-go">
+    <img src="https://raw.githubusercontent.com/floci-io/floci/main/docs/assets/floci-black.svg#gh-light-mode-only" alt="floci-go" width="450" />
+    <img src="https://raw.githubusercontent.com/floci-io/floci/main/docs/assets/floci-white.svg#gh-dark-mode-only" alt="floci-go" width="450" />
+  </a>
+</p>
 
-> **A sub-10ms, ultra-lightweight AWS emulator in pure Go — with built-in Web Console, Cognito JWTs, Step Functions, and SQLite RDS.**
+<p align="center">
+  <strong>Any Cloud. Locally. Now in Pure Go.</strong><br />
+  A sub-10ms, ultra-lightweight AWS emulator — with built-in Web Console, Cognito JWTs, Step Functions, and SQLite RDS.<br />
+  <em>No account · No auth token · No feature gates · Under 20 MB RAM</em>
+</p>
 
-[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white)](go.mod)
-[![Release](https://img.shields.io/badge/release-v0.0.1-brightgreen.svg)](https://github.com/AnkushD919/floci-go/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Docker Size](https://img.shields.io/badge/docker-~12.3MB-2496ED?style=flat&logo=docker&logoColor=white)](#quick-start)
+<p align="center">
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white" alt="Go Version" /></a>
+  <a href="https://github.com/AnkushD919/floci-go/releases"><img src="https://img.shields.io/badge/release-v0.0.1-brightgreen.svg" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/docker-~12.3MB-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker Size" /></a>
+</p>
 
-`floci-go` is designed for developers who want **instant local development and lightning-fast CI/CD runs** without the 1.5 GB RAM footprint, 45-second boot times, or paywalled features of traditional emulators.
+<p align="center">
+  <a href="#-why-floci-go">Why floci-go?</a> ·
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-supported-aws-services--features">Services</a> ·
+  <a href="#%EF%B8%8F-usage-with-aws-cli--sdks">SDKs & CLI</a> ·
+  <a href="#-architecture--extensibility">Architecture</a> ·
+  <a href="#-cicd-integration-github-actions">CI/CD</a>
+</p>
 
 ---
 
@@ -226,6 +244,41 @@ jobs:
 ---
 
 ## 🏛️ Architecture & Extensibility
+
+```mermaid
+flowchart LR
+    Client["AWS SDK / CLI / Browser"]
+
+    subgraph FlociGo ["floci-go (Port :4566)"]
+        Router["HTTP Multiplexer & Protocol Dispatcher"]
+
+        subgraph CoreServices ["Pure-Go In-Process Services"]
+            Stateless["STS · IAM · KMS · SSM · Secrets Manager\nCognito (HS256 JWTs) · EventBridge (Scheduler)\nCloudWatch (Logs & Metrics) · SQS · SNS"]
+            Stateful["S3 (Bucket & Object Engine)\nDynamoDB (In-Memory Engine)"]
+            Database["RDS Data API\n(Embedded SQLite Engine)"]
+            Workflows["Step Functions\n(ASL In-Process Execution Loop)"]
+        end
+
+        subgraph ContainerServices ["Docker RIE Backend"]
+            Lambda["Lambda Functions\n(Node.js, Python, Go, Java)"]
+        end
+
+        subgraph Console ["Built-in Web Console UI"]
+            Dashboard["Embedded HTML/JS Dashboard\n(Served on :4566/)"]
+        end
+
+        Router --> Stateless
+        Router --> Stateful
+        Router --> Database
+        Router --> Workflows
+        Router --> ContainerServices
+        Router --> Dashboard
+    end
+
+    Docker["Docker Engine"]
+    Client -->|"HTTP :4566\nAWS wire protocol"| Router
+    ContainerServices -->|"Docker API\nVolume mount"| Docker
+```
 
 `floci-go` is built on a clean, pluggable architecture. Each service implements the minimal `ServicePlugin` interface:
 
