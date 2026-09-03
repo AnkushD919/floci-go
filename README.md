@@ -1,7 +1,10 @@
 <p align="center">
   <a href="https://github.com/AnkushD919/floci-go">
-    <img src="docs/assets/floci-black.svg#gh-light-mode-only" alt="floci-go" width="450" />
-    <img src="docs/assets/floci-white.svg#gh-dark-mode-only" alt="floci-go" width="450" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AnkushD919/floci-go/main/docs/assets/floci-white.svg">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/AnkushD919/floci-go/main/docs/assets/floci-black.svg">
+      <img alt="floci-go" src="https://raw.githubusercontent.com/AnkushD919/floci-go/main/docs/assets/floci-white.svg" width="450">
+    </picture>
   </a>
 </p>
 
