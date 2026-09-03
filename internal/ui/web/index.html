@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Floci — Local AWS Emulator Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070B14;
+      --bg2: #111827;
+      --bg3: #0B0F19;
+      --border: #1F2937;
+      --border-bright: #374151;
+      --text: #F9FAFB;
+      --text-muted: #9CA3AF;
+      --text-dim: #6B7280;
+      --accent: #818CF8;
+      --accent-deep: #4F46E5;
+      --accent-mid: #6366F1;
+      --accent-dim: rgba(99,102,241,0.12);
+      --green: #10B981;
+      --red: #EF4444;
+      --sans: "Sora", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --mono: "Space Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1000px 500px at 50% -10%, rgba(99,102,241,0.15) 0%, rgba(79,70,229,0.05) 40%, transparent 80%),
+        var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      display: flex; flex-direction: column; align-items: center; padding: 24px;
+    }
+    header {
+      width: min(1200px, 95vw); display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; padding: 16px 24px; background: rgba(17,24,39,0.7);
+      backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 16px;
+    }
+    .logo-wrap { display: flex; align-items: center; gap: 12px; }
+    .logo { height: 32px; width: auto; }
+    .status {
+      display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px;
+      padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+    }
+    .status .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim);
+    }
+    .status.ready .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status.offline .dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    
+    .container {
+      width: min(1200px, 95vw); display: grid; grid-template-columns: 340px 1fr; gap: 24px;
+    }
+    .sidebar, .main-content {
+      background: rgba(17,24,39,0.7); backdrop-filter: blur(12px);
+      border: 1px solid var(--border); border-radius: 20px; padding: 24px;
+    }
+    .sidebar { height: fit-content; }
+    
+    h2 { margin: 0 0 16px; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .meta-grid { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+    .meta-item { font-size: 12px; color: var(--text-dim); }
+    .meta-item b { color: var(--text); font-family: var(--mono); font-size: 13px; }
+    
+    .search-box {
+      width: 100%; padding: 10px 14px; border-radius: 10px; background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border); color: var(--text); font-family: var(--mono);
+      font-size: 12px; outline: none; margin-bottom: 12px;
+    }
+    .search-box:focus { border-color: var(--accent); }
+    
+    .service-list { display: flex; flex-direction: column; gap: 6px; }
+    .service-badge {
+      display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+      border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid transparent;
+      cursor: pointer; transition: all 0.2s ease; font-family: var(--mono); font-size: 13px;
+    }
+    .service-badge:hover { background: rgba(255,255,255,0.05); }
+    .service-badge.active { background: var(--accent-dim); border-color: rgba(129,140,248,0.3); color: var(--accent); }
+    .service-badge .count-badge {
+      font-size: 10px; padding: 2px 6px; border-radius: 99px; background: rgba(0,0,0,0.3); color: var(--text-muted);
+    }
+    
+    .pane { display: none; }
+    .pane.active { display: block; }
+    
+    .pane-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    .pane-title h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .resource-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .resource-card {
+      background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .resource-card:hover { border-color: var(--border-bright); }
+    .resource-details { display: flex; flex-direction: column; gap: 4px; }
+    .resource-name { font-weight: 600; font-size: 15px; color: var(--text); }
+    .resource-meta { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+    
+    .form-box {
+      background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .form-box h3 { margin: 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-row { display: flex; gap: 10px; }
+    .form-input {
+      flex: 1; padding: 10px 14px; border-radius: 8px; background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border); color: var(--text); font-family: var(--sans); font-size: 13px; outline: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .btn {
+      padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; font-size: 13px;
+      cursor: pointer; transition: all 0.15s ease; background: var(--accent-mid); color: #fff;
+    }
+    .btn:hover { background: var(--accent); }
+    .btn-red { background: rgba(239,68,68,0.2); color: var(--red); border: 1px solid rgba(239,68,68,0.4); }
+    .btn-red:hover { background: rgba(239,68,68,0.3); }
+    
+    .table-container { overflow-x: auto; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    th { padding: 12px; border-bottom: 1px solid var(--border-bright); color: var(--text-muted); font-weight: 600; }
+    td { padding: 12px; border-bottom: 1px solid var(--border); color: #c4cde0; font-family: var(--mono); }
+    tr:hover td { background: rgba(255,255,255,0.01); }
+    
+    .explorer-view {
+      border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: rgba(0,0,0,0.1); margin-top: 16px;
+    }
+    .back-link { cursor: pointer; color: var(--accent); font-size: 13px; margin-bottom: 12px; display: inline-block; }
+    .back-link:hover { text-decoration: underline; }
+    
+    .empty-state { padding: 32px; text-align: center; color: var(--text-dim); font-size: 14px; border: 1px dashed var(--border); border-radius: 12px; }
+    
+    code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-wrap">
+      <svg class="logo" viewBox="0 0 531.25 156.71" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M305.44,141.35h-15.94V39.04h-17.08c-13.18,0-16.75,7.81-16.59,17.4v8.95h17.4v13.34h-17.4v62.62h-15.94v-62.62h-14.64v-13.34h14.64v-7.16c0-20.66,8.95-34.16,29.6-34.16h35.95v117.28Z" fill="#F9FAFB"/>
+        <path d="M324.31,103.29c0-24.07,18.22-39.85,39.85-39.85s40.01,15.78,40.01,39.85-18.38,40.01-40.01,40.01-39.85-15.94-39.85-40.01ZM388.24,103.29c0-14.64-11.06-24.89-24.07-24.89s-23.91,10.25-23.91,24.89,10.9,25.05,23.91,25.05,24.07-10.25,24.07-25.05Z" fill="#F9FAFB"/>
+        <path d="M418,103.29c0-24.07,19.03-39.85,40.99-39.85,12.36,0,22.93,5.04,29.6,13.01l-10.57,9.92c-4.39-4.88-11.06-7.97-18.71-7.97-14.15,0-25.38,10.41-25.38,24.89s11.22,25.05,25.38,25.05c7.65,0,14.31-3.09,18.71-7.97l10.57,9.92c-6.67,7.97-17.24,13.01-29.6,13.01-21.96,0-40.99-15.94-40.99-40.01Z" fill="#F9FAFB"/>
+        <path d="M502.91,37.74c0-5.86,5.04-10.25,10.9-10.25s10.9,4.39,10.9,10.25-4.88,10.25-10.9,10.25-10.9-4.39-10.9-10.25ZM505.84,141.35v-75.96h15.94v75.96h-15.94Z" fill="#F9FAFB"/>
+        <path d="M44.46,52.16l-1.44,9.05c-.1.64-35.57,8.08-30.51,43.05,2.04,14.08,14.69,31.06,31.94,31.22l84.34.78c3.64.03,7.49.5,9.97,2.81,1.69,1.57,1.95,6.1-.29,9.22l-83.49.43c-22.68.12-43.45-11.19-51.76-32.9-8.64-22.56.61-49.48,22.58-59.54,5.11-2.34,7.7-4,8.39-9.37l10.28,5.24Z" fill="#F9FAFB"/>
+        <path d="M44.46,52.16l-10.28-5.24c1.94-15.09,10.61-28.25,23.15-36.38C74.85-.82,94.57-3.69,115.01,5.35c14.93,6.6,26.96,21.97,32.12,39.33,26.07,3.63,46.19,26.18,40.75,53.8-3.06.86-9.18-1.15-11.34-3.72,1.28-12.11-3.1-22.27-10.75-29.43-8.19-7.67-17.88-9.28-30.09-8.04-.09-25.91-19.81-43.97-43.82-45.33-22.91-1.29-43.59,16.13-47.42,40.2h0Z" fill="#F9FAFB"/>
+        <ellipse cx="173.57" cy="127.13" rx="20.36" ry="20.4" fill="#818CF8"/>
+        <ellipse cx="513.02" cy="37.71" rx="13.22" ry="13.25" fill="#818CF8"/>
+      </svg>
+      <span style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent); padding-left: 8px;">CONSOLE</span>
+    </div>
+    <span class="status ready" id="global-status">
+      <span class="dot"></span><span>ONLINE</span>
+    </span>
+  </header>
+
+  <main class="container">
+    <section class="sidebar">
+      <h2>Emulator Info</h2>
+      <div class="meta-grid">
+        <div class="meta-item">Endpoint: <br><b>http://localhost:4566</b></div>
+        <div class="meta-item">Region: <br><b id="meta-region">us-east-1</b></div>
+        <div class="meta-item">Account ID: <br><b>000000000000</b></div>
+        <div class="meta-item">Uptime: <br><b id="meta-uptime">0s</b></div>
+      </div>
+
+      <h2>Services</h2>
+      <input type="text" class="search-box" id="service-search" placeholder="Filter services..." />
+      <div class="service-list" id="services-badges-container">
+        <!-- JS filled -->
+      </div>
+    </section>
+
+    <section class="main-content">
+      <!-- Welcome Pane -->
+      <div class="pane active" id="pane-welcome">
+        <div class="pane-title">
+          <h1>Welcome to Floci</h1>
+        </div>
+        <p>This is the local AWS emulator dashboard. Use the sidebar to inspect and manage active resources inside each mock service.</p>
+        <p>To point your AWS CLI or SDK here, configure the custom endpoint option:</p>
+        <pre><code>aws --endpoint-url=http://localhost:4566 s3 ls</code></pre>
+        <p>All resources created via SDK clients or CLI calls will dynamically appear here in real-time.</p>
+      </div>
+
+      <!-- S3 Pane -->
+      <div class="pane" id="pane-s3">
+        <div class="pane-title">
+          <h1>Amazon S3</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Bucket</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="s3-create-name" placeholder="Bucket Name (e.g. my-app-assets)" />
+            <button class="btn" onclick="createS3Bucket()">Create</button>
+          </div>
+        </div>
+        <div id="s3-bucket-list">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- DynamoDB Pane -->
+      <div class="pane" id="pane-dynamodb">
+        <div class="pane-title">
+          <h1>Amazon DynamoDB</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Table</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="ddb-create-name" placeholder="Table Name" />
+            <input type="text" class="form-input" id="ddb-create-key" placeholder="Hash Key Name (default: pk)" />
+            <button class="btn" onclick="createDDBTable()">Create</button>
+          </div>
+        </div>
+        <div id="ddb-table-list">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- SQS Pane -->
+      <div class="pane" id="pane-sqs">
+        <div class="pane-title">
+          <h1>Amazon SQS</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Queue</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="sqs-create-name" placeholder="Queue Name" />
+            <button class="btn" onclick="createSQSQueue()">Create</button>
+          </div>
+        </div>
+        <div id="sqs-queue-list">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- SNS Pane -->
+      <div class="pane" id="pane-sns">
+        <div class="pane-title">
+          <h1>Amazon SNS</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Topic</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="sns-create-name" placeholder="Topic Name" />
+            <button class="btn" onclick="createSNSTopic()">Create</button>
+          </div>
+        </div>
+        <div id="sns-topic-list">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- SSM Pane -->
+      <div class="pane" id="pane-ssm">
+        <div class="pane-title">
+          <h1>SSM Parameter Store</h1>
+        </div>
+        <div class="form-box">
+          <h3>Put Parameter</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="ssm-create-name" placeholder="Name (e.g. /config/db_host)" />
+            <input type="text" class="form-input" id="ssm-create-value" placeholder="Value" />
+            <select class="form-input" id="ssm-create-type" style="flex: 0.4;">
+              <option value="String">String</option>
+              <option value="SecureString">SecureString</option>
+            </select>
+            <button class="btn" onclick="putSSMParameter()">Put</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Value</th>
+                <th>Version</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="ssm-param-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Secrets Manager Pane -->
+      <div class="pane" id="pane-secretsmanager">
+        <div class="pane-title">
+          <h1>Secrets Manager</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Secret</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="sm-create-name" placeholder="Secret Name" />
+            <input type="text" class="form-input" id="sm-create-value" placeholder="Secret String Value" />
+            <button class="btn" onclick="createSMSecret()">Create</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>ARN</th>
+                <th>Value</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="sm-secret-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- IAM Pane -->
+      <div class="pane" id="pane-iam">
+        <div class="pane-title">
+          <h1>AWS IAM</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Role</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="iam-create-name" placeholder="Role Name" />
+            <button class="btn" onclick="createIAMRole()">Create</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Role Name</th>
+                <th>ARN</th>
+                <th>Created Date</th>
+              </tr>
+            </thead>
+            <tbody id="iam-role-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- KMS Pane -->
+      <div class="pane" id="pane-kms">
+        <div class="pane-title">
+          <h1>AWS KMS</h1>
+        </div>
+        <div class="form-box">
+          <h3>Create Symmetric Key</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="kms-create-desc" placeholder="Key Description" />
+            <button class="btn" onclick="createKMSKey()">Create</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Key ID</th>
+                <th>ARN</th>
+                <th>Description</th>
+                <th>Enabled</th>
+              </tr>
+            </thead>
+            <tbody id="kms-key-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Lambda Pane -->
+      <div class="pane" id="pane-lambda">
+        <div class="pane-title">
+          <h1>AWS Lambda</h1>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Function Name</th>
+                <th>Runtime</th>
+                <th>Handler</th>
+                <th>Timeout</th>
+                <th>Memory</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="lambda-function-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- API Gateway v2 Pane -->
+      <div class="pane" id="pane-apigatewayv2">
+        <div class="pane-title">
+          <h1>Amazon API Gateway v2</h1>
+        </div>
+        <div id="apigw-api-list">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- EventBridge Pane -->
+      <div class="pane" id="pane-eventbridge">
+        <div class="pane-title">
+          <h1>Amazon EventBridge</h1>
+        </div>
+        <div class="form-box">
+          <h3>Trigger Mock Event</h3>
+          <div class="form-row">
+            <input type="text" class="form-input" id="eb-pub-source" placeholder="Source (e.g. aws.s3)" />
+            <input type="text" class="form-input" id="eb-pub-detailtype" placeholder="Detail Type (e.g. Object Created)" />
+            <input type="text" class="form-input" id="eb-pub-detail" placeholder="Detail JSON" />
+            <button class="btn" onclick="putEventBridgeEvent()">Trigger</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Rule Name</th>
+                <th>State</th>
+                <th>Schedule</th>
+                <th>Pattern</th>
+                <th>Targets</th>
+              </tr>
+            </thead>
+            <tbody id="eventbridge-rule-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cognito Pane -->
+      <div class="pane" id="pane-cognito">
+        <div class="pane-title">
+          <h1>Amazon Cognito</h1>
+        </div>
+        <div id="cognito-view-container">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- CloudWatch Pane -->
+      <div class="pane" id="pane-cloudwatch">
+        <div class="pane-title">
+          <h1>Amazon CloudWatch Logs</h1>
+        </div>
+        <div id="cw-view-container">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- RDS Pane -->
+      <div class="pane" id="pane-rds">
+        <div class="pane-title">
+          <h1>Amazon RDS</h1>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>DB Identifier</th>
+                <th>Engine</th>
+                <th>Address</th>
+                <th>DB Name</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rds-instance-rows">
+              <!-- JS filled -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Step Functions Pane -->
+      <div class="pane" id="pane-stepfunctions">
+        <div class="pane-title">
+          <h1>AWS Step Functions</h1>
+        </div>
+        <div id="sf-view-container">
+          <!-- JS filled -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const services = ["s3", "dynamodb", "sqs", "sns", "ssm", "secretsmanager", "iam", "kms", "lambda", "apigatewayv2", "eventbridge", "cognito", "cloudwatch", "rds", "stepfunctions"];
+    let activeService = null;
+    let serviceSearchQuery = "";
+    let dataCache = {};
+
+    // S3 Explorer State
+    let s3ActiveBucket = null;
+
+    // DDB Explorer State
+    let ddbActiveTable = null;
+
+    // SQS Explorer State
+    let sqsActiveQueue = null;
+
+    // SNS Explorer State
+    let snsActiveTopic = null;
+
+    // New Explorer States
+    let apigwActiveApi = null;
+    let cognitoActivePool = null;
+    let cwActiveGroup = null;
+    let cwActiveStream = null;
+    let sfActiveMachine = null;
+    let sfActiveExecution = null;
+
+    // DOM Elements
+    const metaRegion = document.getElementById("meta-region");
+    const metaUptime = document.getElementById("meta-uptime");
+    const servicesContainer = document.getElementById("services-badges-container");
+    const serviceSearch = document.getElementById("service-search");
+
+    // Initialize sidebar
+    function renderSidebar() {
+      const query = serviceSearchQuery.toLowerCase();
+      servicesContainer.innerHTML = services
+        .filter(s => s.includes(query))
+        .map(s => {
+          const isActive = s === activeService;
+          const count = getResourceCount(s);
+          return `
+            <div class="service-badge ${isActive ? 'active' : ''}" onclick="switchService('${s}')">
+              <span>${s.toUpperCase()}</span>
+              <span class="count-badge">${count}</span>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function getResourceCount(service) {
+      if (!dataCache[service]) return 0;
+      switch (service) {
+        case "s3": return (dataCache.s3.buckets || []).length;
+        case "dynamodb": return (dataCache.dynamodb.tables || []).length;
+        case "sqs": return (dataCache.sqs.queues || []).length;
+        case "sns": return (dataCache.sns.topics || []).length;
+        case "ssm": return (dataCache.ssm.parameters || []).length;
+        case "secretsmanager": return (dataCache.secretsmanager.secrets || []).length;
+        case "iam": return (dataCache.iam.roles || []).length;
+        case "kms": return (dataCache.kms.keys || []).length;
+        case "lambda": return (dataCache.lambda.functions || []).length;
+        case "apigatewayv2": return (dataCache.apigatewayv2.apis || []).length;
+        case "eventbridge": return (dataCache.eventbridge.rules || []).length;
+        case "cognito": return (dataCache.cognito.pools || []).length;
+        case "cloudwatch": return (dataCache.cloudwatch.groups || []).length;
+        case "rds": return (dataCache.rds.instances || []).length;
+        case "stepfunctions": return (dataCache.stepfunctions.stateMachines || []).length;
+        default: return 0;
+      }
+    }
+
+    function switchService(service) {
+      activeService = service;
+      // Hide all panes
+      document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
+      // Show active pane
+      const pane = document.getElementById(`pane-${service}`);
+      if (pane) pane.classList.add("active");
+      
+      // Reset explorer sub-states
+      s3ActiveBucket = null;
+      ddbActiveTable = null;
+      sqsActiveQueue = null;
+      snsActiveTopic = null;
+      apigwActiveApi = null;
+      cognitoActivePool = null;
+      cwActiveGroup = null;
+      cwActiveStream = null;
+      sfActiveMachine = null;
+      sfActiveExecution = null;
+
+      renderSidebar();
+      renderActivePane();
+    }
+
+    function renderActivePane() {
+      if (!activeService) return;
+      
+      switch (activeService) {
+        case "s3": renderS3(); break;
+        case "dynamodb": renderDDB(); break;
+        case "sqs": renderSQS(); break;
+        case "sns": renderSNS(); break;
+        case "ssm": renderSSM(); break;
+        case "secretsmanager": renderSM(); break;
+        case "iam": renderIAM(); break;
+        case "kms": renderKMS(); break;
+        case "lambda": renderLambda(); break;
+        case "apigatewayv2": renderAPIGW(); break;
+        case "eventbridge": renderEventBridge(); break;
+        case "cognito": renderCognito(); break;
+        case "cloudwatch": renderCloudWatch(); break;
+        case "rds": renderRDS(); break;
+        case "stepfunctions": renderStepFunctions(); break;
+      }
+    }
+
+    // --- S3 ---
+    function renderS3() {
+      const container = document.getElementById("s3-bucket-list");
+      const buckets = dataCache.s3 ? dataCache.s3.buckets || [] : [];
+
+      if (s3ActiveBucket) {
+        const bucket = buckets.find(b => b.name === s3ActiveBucket);
+        if (!bucket) {
+          s3ActiveBucket = null;
+          renderS3();
+          return;
+        }
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="s3ActiveBucket = null; renderS3()">&larr; Back to Buckets</span>
+            <h2>Bucket: ${bucket.name}</h2>
+            <div class="form-box">
+              <h3>Upload File</h3>
+              <div class="form-row">
+                <input type="text" class="form-input" id="s3-upload-key" placeholder="Key (e.g. images/avatar.png)" />
+                <input type="text" class="form-input" id="s3-upload-body" placeholder="Text Content" />
+                <button class="btn" onclick="uploadS3Object('${bucket.name}')">Upload</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Size (Bytes)</th>
+                    <th>Content Type</th>
+                    <th>Last Modified</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${bucket.objects.length === 0 ? '<tr><td colspan="5" class="empty-state">No objects in this bucket</td></tr>' : ''}
+                  ${bucket.objects.map(obj => `
+                    <tr>
+                      <td>${obj.key}</td>
+                      <td>${obj.size}</td>
+                      <td>${obj.contentType}</td>
+                      <td>${new Date(obj.lastModified).toLocaleString()}</td>
+                      <td>
+                        <button class="btn btn-red" style="padding: 4px 8px; font-size: 11px;" onclick="deleteS3Object('${bucket.name}', '${obj.key}')">Delete</button>
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (buckets.length === 0) {
+        container.innerHTML = `<div class="empty-state">No S3 Buckets created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${buckets.map(b => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${b.name}</span>
+                <span class="resource-meta">Region: ${b.locationConstraint || 'us-east-1'} · Objects: ${b.objects.length}</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="s3ActiveBucket = '${b.name}'; renderS3()">Explore</button>
+                <button class="btn btn-red" style="padding: 6px 12px; font-size: 12px;" onclick="deleteS3Bucket('${b.name}')">Delete</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    async function createS3Bucket() {
+      const name = document.getElementById("s3-create-name").value.trim();
+      if (!name) return;
+      await fetch('/' + name, { method: 'PUT' });
+      document.getElementById("s3-create-name").value = "";
+      refreshData();
+    }
+
+    async function deleteS3Bucket(name) {
+      if (!confirm(`Delete S3 Bucket "${name}"?`)) return;
+      await fetch('/' + name, { method: 'DELETE' });
+      refreshData();
+    }
+
+    async function uploadS3Object(bucket) {
+      const key = document.getElementById("s3-upload-key").value.trim();
+      const body = document.getElementById("s3-upload-body").value;
+      if (!key) return;
+      await fetch('/' + bucket + '/' + key, {
+        method: 'PUT',
+        body: body
+      });
+      document.getElementById("s3-upload-key").value = "";
+      document.getElementById("s3-upload-body").value = "";
+      refreshData();
+    }
+
+    async function deleteS3Object(bucket, key) {
+      if (!confirm(`Delete S3 Object "${key}"?`)) return;
+      await fetch('/' + bucket + '/' + key, { method: 'DELETE' });
+      refreshData();
+    }
+
+    // --- DynamoDB ---
+    function renderDDB() {
+      const container = document.getElementById("ddb-table-list");
+      const tables = dataCache.dynamodb ? dataCache.dynamodb.tables || [] : [];
+
+      if (ddbActiveTable) {
+        const table = tables.find(t => t.Meta.TableName === ddbActiveTable);
+        if (!table) {
+          ddbActiveTable = null;
+          renderDDB();
+          return;
+        }
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="ddbActiveTable = null; renderDDB()">&larr; Back to Tables</span>
+            <h2>Table: ${table.Meta.TableName}</h2>
+            <div class="form-box">
+              <h3>Insert Item (Simple HASH key only)</h3>
+              <div class="form-row">
+                <input type="text" class="form-input" id="ddb-insert-key-val" placeholder="Hash Key Value" />
+                <input type="text" class="form-input" id="ddb-insert-attrs" placeholder="Attributes JSON (e.g. {&quot;name&quot;:{&quot;S&quot;:&quot;Alice&quot;}})" />
+                <button class="btn" onclick="insertDDBItem('${table.Meta.TableName}', '${table.Meta.KeySchema[0].AttributeName}')">Insert</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Keys & Attributes</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${table.Items.length === 0 ? '<tr><td colspan="2" class="empty-state">No items in this table</td></tr>' : ''}
+                  ${table.Items.map((item, idx) => `
+                    <tr>
+                      <td><code>${JSON.stringify(item)}</code></td>
+                      <td>
+                        <button class="btn btn-red" style="padding: 4px 8px; font-size: 11px;" onclick="deleteDDBItem('${table.Meta.TableName}', ${idx})">Delete</button>
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (tables.length === 0) {
+        container.innerHTML = `<div class="empty-state">No DynamoDB Tables created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${tables.map(t => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${t.Meta.TableName}</span>
+                <span class="resource-meta">Hash Key: ${t.Meta.KeySchema[0].AttributeName} · Items: ${t.Items.length}</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="ddbActiveTable = '${t.Meta.TableName}'; renderDDB()">Explore</button>
+                <button class="btn btn-red" style="padding: 6px 12px; font-size: 12px;" onclick="deleteDDBTable('${t.Meta.TableName}')">Delete</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    async function createDDBTable() {
+      const name = document.getElementById("ddb-create-name").value.trim();
+      let hashKey = document.getElementById("ddb-create-key").value.trim();
+      if (!name) return;
+      if (!hashKey) hashKey = "pk";
+
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'DynamoDB_20120810.CreateTable' },
+        body: JSON.stringify({
+          TableName: name,
+          BillingMode: 'PAY_PER_REQUEST',
+          AttributeDefinitions: [{ AttributeName: hashKey, AttributeType: 'S' }],
+          KeySchema: [{ AttributeName: hashKey, KeyType: 'HASH' }]
+        })
+      });
+      document.getElementById("ddb-create-name").value = "";
+      document.getElementById("ddb-create-key").value = "";
+      refreshData();
+    }
+
+    async function deleteDDBTable(name) {
+      if (!confirm(`Delete DynamoDB Table "${name}"?`)) return;
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'DynamoDB_20120810.DeleteTable' },
+        body: JSON.stringify({ TableName: name })
+      });
+      refreshData();
+    }
+
+    async function insertDDBItem(tableName, hashKeyName) {
+      const keyVal = document.getElementById("ddb-insert-key-val").value.trim();
+      const rawAttrs = document.getElementById("ddb-insert-attrs").value.trim();
+      if (!keyVal) return;
+      let attrs = {};
+      if (rawAttrs) {
+        try { attrs = JSON.parse(rawAttrs); } catch (e) { alert("Invalid Attributes JSON"); return; }
+      }
+      attrs[hashKeyName] = { "S": keyVal };
+
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'DynamoDB_20120810.PutItem' },
+        body: JSON.stringify({
+          TableName: tableName,
+          Item: attrs
+        })
+      });
+      document.getElementById("ddb-insert-key-val").value = "";
+      document.getElementById("ddb-insert-attrs").value = "";
+      refreshData();
+    }
+
+    async function deleteDDBItem(tableName, index) {
+      if (!confirm(`Delete this table item?`)) return;
+      const table = dataCache.dynamodb.tables.find(t => t.Meta.TableName === tableName);
+      const item = table.Items[index];
+      const key = {};
+      table.Meta.KeySchema.forEach(ks => {
+        key[ks.AttributeName] = item[ks.AttributeName];
+      });
+
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'DynamoDB_20120810.DeleteItem' },
+        body: JSON.stringify({
+          TableName: tableName,
+          Key: key
+        })
+      });
+      refreshData();
+    }
+
+    // --- SQS ---
+    function renderSQS() {
+      const container = document.getElementById("sqs-queue-list");
+      const queues = dataCache.sqs ? dataCache.sqs.queues || [] : [];
+
+      if (sqsActiveQueue) {
+        const queue = queues.find(q => q.URL === sqsActiveQueue);
+        if (!queue) {
+          sqsActiveQueue = null;
+          renderSQS();
+          return;
+        }
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="sqsActiveQueue = null; renderSQS()">&larr; Back to Queues</span>
+            <h2>Queue: ${queue.Name}</h2>
+            <div class="form-box">
+              <h3>Publish SQS Message</h3>
+              <div class="form-row">
+                <input type="text" class="form-input" id="sqs-msg-body" placeholder="Message Body" />
+                <button class="btn" onclick="sendSQSMessage('${queue.URL}')">Send</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Message ID</th>
+                    <th>MD5</th>
+                    <th>Body</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${queue.Messages.length === 0 ? '<tr><td colspan="3" class="empty-state">Queue is empty</td></tr>' : ''}
+                  ${queue.Messages.map(msg => `
+                    <tr>
+                      <td>${msg.MessageID}</td>
+                      <td>${msg.MD5OfBody}</td>
+                      <td><code>${msg.Body}</code></td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (queues.length === 0) {
+        container.innerHTML = `<div class="empty-state">No SQS Queues created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${queues.map(q => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${q.Name}</span>
+                <span class="resource-meta">Messages: ${q.Messages.length} · URL: ${q.URL}</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="sqsActiveQueue = '${q.URL}'; renderSQS()">Explore</button>
+                <button class="btn btn-red" style="padding: 6px 12px; font-size: 12px;" onclick="deleteSQSQueue('${q.URL}')">Delete</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    async function createSQSQueue() {
+      const name = document.getElementById("sqs-create-name").value.trim();
+      if (!name) return;
+      await fetch('/?Action=CreateQueue&QueueName=' + name);
+      document.getElementById("sqs-create-name").value = "";
+      refreshData();
+    }
+
+    async function deleteSQSQueue(queueURL) {
+      if (!confirm(`Delete SQS Queue?`)) return;
+      await fetch('/?Action=DeleteQueue&QueueUrl=' + encodeURIComponent(queueURL));
+      refreshData();
+    }
+
+    async function sendSQSMessage(queueURL) {
+      const body = document.getElementById("sqs-msg-body").value;
+      if (!body) return;
+      await fetch('/?Action=SendMessage&QueueUrl=' + encodeURIComponent(queueURL) + '&MessageBody=' + encodeURIComponent(body));
+      document.getElementById("sqs-msg-body").value = "";
+      refreshData();
+    }
+
+    // --- SNS ---
+    function renderSNS() {
+      const container = document.getElementById("sns-topic-list");
+      const topics = dataCache.sns ? dataCache.sns.topics || [] : [];
+      const subs = dataCache.sns ? dataCache.sns.subscriptions || [] : [];
+
+      if (snsActiveTopic) {
+        const topic = topics.find(t => t.ARN === snsActiveTopic);
+        if (!topic) {
+          snsActiveTopic = null;
+          renderSNS();
+          return;
+        }
+        const topicSubs = subs.filter(s => s.TopicARN === topic.ARN);
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="snsActiveTopic = null; renderSNS()">&larr; Back to Topics</span>
+            <h2>Topic: ${topic.Name}</h2>
+            <div class="form-box">
+              <h3>Publish Message to Topic</h3>
+              <div class="form-row">
+                <input type="text" class="form-input" id="sns-pub-msg" placeholder="Message content..." />
+                <button class="btn" onclick="publishSNSTopic('${topic.ARN}')">Publish</button>
+              </div>
+            </div>
+            <div class="form-box">
+              <h3>Subscribe SQS Queue to Topic</h3>
+              <div class="form-row">
+                <select class="form-input" id="sns-sub-sqs-arn">
+                  ${(dataCache.sqs?.queues || []).map(q => `<option value="${q.ARN}">${q.Name} (${q.ARN})</option>`).join("")}
+                  ${(dataCache.sqs?.queues || []).length === 0 ? '<option value="">No SQS Queues available</option>' : ''}
+                </select>
+                <button class="btn" onclick="subscribeSQSToSNS('${topic.ARN}')">Subscribe</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Subscription ARN</th>
+                    <th>Protocol</th>
+                    <th>Endpoint</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${topicSubs.length === 0 ? '<tr><td colspan="3" class="empty-state">No subscriptions for this topic</td></tr>' : ''}
+                  ${topicSubs.map(s => `
+                    <tr>
+                      <td>${s.ARN}</td>
+                      <td>${s.Protocol}</td>
+                      <td>${s.Endpoint}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (topics.length === 0) {
+        container.innerHTML = `<div class="empty-state">No SNS Topics created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${topics.map(t => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${t.Name}</span>
+                <span class="resource-meta">ARN: ${t.ARN}</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="snsActiveTopic = '${t.ARN}'; renderSNS()">Explore</button>
+                <button class="btn btn-red" style="padding: 6px 12px; font-size: 12px;" onclick="deleteSNSTopic('${t.ARN}')">Delete</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    async function createSNSTopic() {
+      const name = document.getElementById("sns-create-name").value.trim();
+      if (!name) return;
+      await fetch('/?Action=CreateTopic&Name=' + name);
+      document.getElementById("sns-create-name").value = "";
+      refreshData();
+    }
+
+    async function deleteSNSTopic(arn) {
+      if (!confirm(`Delete SNS Topic?`)) return;
+      await fetch('/?Action=DeleteTopic&TopicArn=' + encodeURIComponent(arn));
+      refreshData();
+    }
+
+    async function publishSNSTopic(arn) {
+      const msg = document.getElementById("sns-pub-msg").value;
+      if (!msg) return;
+      await fetch('/?Action=Publish&TopicArn=' + encodeURIComponent(arn) + '&Message=' + encodeURIComponent(msg));
+      document.getElementById("sns-pub-msg").value = "";
+      refreshData();
+      alert("Message published!");
+    }
+
+    async function subscribeSQSToSNS(topicArn) {
+      const queueArn = document.getElementById("sns-sub-sqs-arn").value;
+      if (!queueArn) return;
+      await fetch('/?Action=Subscribe&TopicArn=' + encodeURIComponent(topicArn) + '&Protocol=sqs&Endpoint=' + encodeURIComponent(queueArn));
+      refreshData();
+    }
+
+    // --- SSM ---
+    function renderSSM() {
+      const container = document.getElementById("ssm-param-rows");
+      const params = dataCache.ssm ? dataCache.ssm.parameters || [] : [];
+      
+      if (params.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="empty-state">No parameters created yet</td></tr>`;
+        return;
+      }
+      
+      container.innerHTML = params.map(p => `
+        <tr>
+          <td>${p.Name}</td>
+          <td><code>${p.Type}</code></td>
+          <td><code>${p.Value}</code></td>
+          <td>${p.Version}</td>
+          <td>
+            <button class="btn btn-red" style="padding: 4px 8px; font-size: 11px;" onclick="deleteSSMParameter('${p.Name}')">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function putSSMParameter() {
+      const name = document.getElementById("ssm-create-name").value.trim();
+      const val = document.getElementById("ssm-create-value").value;
+      const type = document.getElementById("ssm-create-type").value;
+      if (!name) return;
+
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'AmazonSSM.PutParameter' },
+        body: JSON.stringify({ Name: name, Value: val, Type: type, Overwrite: true })
+      });
+      document.getElementById("ssm-create-name").value = "";
+      document.getElementById("ssm-create-value").value = "";
+      refreshData();
+    }
+
+    async function deleteSSMParameter(name) {
+      if (!confirm(`Delete parameter "${name}"?`)) return;
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'AmazonSSM.DeleteParameter' },
+        body: JSON.stringify({ Name: name })
+      });
+      refreshData();
+    }
+
+    // --- Secrets Manager ---
+    function renderSM() {
+      const container = document.getElementById("sm-secret-rows");
+      const secrets = dataCache.secretsmanager ? dataCache.secretsmanager.secrets || [] : [];
+
+      if (secrets.length === 0) {
+        container.innerHTML = `<tr><td colspan="4" class="empty-state">No secrets created yet</td></tr>`;
+        return;
+      }
+
+      container.innerHTML = secrets.map(s => `
+        <tr>
+          <td>${s.Name}</td>
+          <td>${s.ARN}</td>
+          <td><code>${s.SecretString || '*******'}</code></td>
+          <td>
+            <button class="btn btn-red" style="padding: 4px 8px; font-size: 11px;" onclick="deleteSMSecret('${s.Name}')">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function createSMSecret() {
+      const name = document.getElementById("sm-create-name").value.trim();
+      const val = document.getElementById("sm-create-value").value;
+      if (!name) return;
+
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'secretsmanager.CreateSecret' },
+        body: JSON.stringify({ Name: name, SecretString: val })
+      });
+      document.getElementById("sm-create-name").value = "";
+      document.getElementById("sm-create-value").value = "";
+      refreshData();
+    }
+
+    async function deleteSMSecret(name) {
+      if (!confirm(`Delete secret "${name}"?`)) return;
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'secretsmanager.DeleteSecret' },
+        body: JSON.stringify({ SecretId: name, ForceDeleteWithoutRecovery: true })
+      });
+      refreshData();
+    }
+
+    // --- IAM ---
+    function renderIAM() {
+      const container = document.getElementById("iam-role-rows");
+      const roles = dataCache.iam ? dataCache.iam.roles || [] : [];
+
+      if (roles.length === 0) {
+        container.innerHTML = `<tr><td colspan="3" class="empty-state">No IAM Roles created yet</td></tr>`;
+        return;
+      }
+
+      container.innerHTML = roles.map(r => `
+        <tr>
+          <td>${r.RoleName}</td>
+          <td>${r.Arn}</td>
+          <td>${r.CreateDate}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function createIAMRole() {
+      const name = document.getElementById("iam-create-name").value.trim();
+      if (!name) return;
+      await fetch('/?Action=CreateRole&RoleName=' + name + '&AssumeRolePolicyDocument=%7B%7D');
+      document.getElementById("iam-create-name").value = "";
+      refreshData();
+    }
+
+    // --- KMS ---
+    function renderKMS() {
+      const container = document.getElementById("kms-key-rows");
+      const keys = dataCache.kms ? dataCache.kms.keys || [] : [];
+
+      if (keys.length === 0) {
+        container.innerHTML = `<tr><td colspan="4" class="empty-state">No KMS keys created yet</td></tr>`;
+        return;
+      }
+
+      container.innerHTML = keys.map(k => `
+        <tr>
+          <td>${k.KeyId}</td>
+          <td>${k.ARN}</td>
+          <td>${k.Description || 'Symmetric Key'}</td>
+          <td>${k.Enabled ? 'Yes' : 'No'}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function createKMSKey() {
+      const desc = document.getElementById("kms-create-desc").value.trim();
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'TrentService.CreateKey' },
+        body: JSON.stringify({ Description: desc })
+      });
+      document.getElementById("kms-create-desc").value = "";
+      refreshData();
+    }
+
+    // Global Data Sync
+    async function refreshData() {
+      try {
+        const [healthRes, infoRes, resRes] = await Promise.all([
+          fetch("/_floci/health").then(r => r.json()),
+          fetch("/_floci/info").then(r => r.json()),
+          fetch("/_floci/api/resources").then(r => r.json())
+        ]);
+        
+        dataCache = resRes;
+        
+        // Render UI
+        metaRegion.textContent = infoRes.region || "us-east-1";
+        metaUptime.textContent = healthRes.uptime || "0s";
+        
+        renderSidebar();
+        renderActivePane();
+        
+        document.getElementById("global-status").className = "status ready";
+        document.getElementById("global-status").querySelector("span:not(.dot)").textContent = "ONLINE";
+      } catch (err) {
+        console.error("Health poll failed", err);
+        document.getElementById("global-status").className = "status offline";
+        document.getElementById("global-status").querySelector("span:not(.dot)").textContent = "OFFLINE";
+      }
+    }
+
+    // Event listener for search
+    serviceSearch.addEventListener("input", (e) => {
+      serviceSearchQuery = e.target.value;
+      renderSidebar();
+    });
+
+    // --- Lambda ---
+    function renderLambda() {
+      const container = document.getElementById("lambda-function-rows");
+      const fns = dataCache.lambda ? dataCache.lambda.functions || [] : [];
+      if (fns.length === 0) {
+        container.innerHTML = `<tr><td colspan="6" class="empty-state">No Lambda functions created yet</td></tr>`;
+        return;
+      }
+      container.innerHTML = fns.map(f => `
+        <tr>
+          <td><b>${f.FunctionName}</b></td>
+          <td><code>${f.Runtime}</code></td>
+          <td><code>${f.Handler}</code></td>
+          <td>${f.Timeout}s</td>
+          <td>${f.MemorySize}MB</td>
+          <td>
+            <button class="btn btn-red" style="padding: 4px 8px; font-size: 11px;" onclick="deleteLambda('${f.FunctionName}')">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function deleteLambda(name) {
+      if (!confirm(`Delete Lambda Function "${name}"?`)) return;
+      await fetch(`/2015-03-31/functions/${name}`, { method: 'DELETE' });
+      refreshData();
+    }
+
+    // --- API Gateway v2 ---
+    function renderAPIGW() {
+      const container = document.getElementById("apigw-api-list");
+      const apis = dataCache.apigatewayv2 ? dataCache.apigatewayv2.apis || [] : [];
+
+      if (apigwActiveApi) {
+        const api = apis.find(a => a.apiId === apigwActiveApi);
+        if (!api) {
+          apigwActiveApi = null;
+          renderAPIGW();
+          return;
+        }
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="apigwActiveApi = null; renderAPIGW()">&larr; Back to HTTP APIs</span>
+            <h2>API: ${api.name} (<code>${api.apiId}</code>)</h2>
+            <p>Protocol: <code>${api.protocolType}</code></p>
+            <p>Target Endpoint: <code>http://localhost:4566/v2/apis/${api.apiId}</code></p>
+
+            <h3 style="margin-top: 20px;">Routes & Integrations</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Route Key</th>
+                    <th>Target Integration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(api.routes || []).length === 0 ? '<tr><td colspan="2" class="empty-state">No routes defined for this API</td></tr>' : ''}
+                  ${(api.routes || []).map(r => {
+                    const integration = (api.integrations || []).find(i => i.integrationId === r.target);
+                    const targetInfo = integration ? `${integration.integrationType} &rarr; ${integration.integrationUri}` : r.target || 'None';
+                    return `
+                      <tr>
+                        <td><b>${r.routeKey}</b></td>
+                        <td><code>${targetInfo}</code></td>
+                      </tr>
+                    `;
+                  }).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (apis.length === 0) {
+        container.innerHTML = `<div class="empty-state">No HTTP APIs created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${apis.map(a => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${a.name} (<code>${a.apiId}</code>)</span>
+                <span class="resource-meta">Endpoint: http://localhost:4566/v2/apis/${a.apiId}</span>
+              </div>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="apigwActiveApi = '${a.apiId}'; renderAPIGW()">Explore</button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // --- EventBridge ---
+    function renderEventBridge() {
+      const container = document.getElementById("eventbridge-rule-rows");
+      const rules = dataCache.eventbridge ? dataCache.eventbridge.rules || [] : [];
+      if (rules.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="empty-state">No rules created yet</td></tr>`;
+        return;
+      }
+      container.innerHTML = rules.map(r => `
+        <tr>
+          <td><b>${r.name}</b></td>
+          <td><code>${r.state}</code></td>
+          <td><code>${r.scheduleExpression || 'None'}</code></td>
+          <td><pre style="margin: 0; font-size: 11px;"><code>${r.eventPattern || 'None'}</code></pre></td>
+          <td>${(r.targets || []).length} Target(s)</td>
+        </tr>
+      `).join("");
+    }
+
+    async function putEventBridgeEvent() {
+      const source = document.getElementById("eb-pub-source").value.trim();
+      const detailType = document.getElementById("eb-pub-detailtype").value.trim();
+      const detail = document.getElementById("eb-pub-detail").value.trim();
+      if (!source || !detailType || !detail) return;
+
+      await fetch('/', {
+        method: 'POST',
+        headers: { 'X-Amz-Target': 'AWSEvents.PutEvents' },
+        body: JSON.stringify({
+          Entries: [{ Source: source, DetailType: detailType, Detail: detail }]
+        })
+      });
+
+      document.getElementById("eb-pub-source").value = "";
+      document.getElementById("eb-pub-detailtype").value = "";
+      document.getElementById("eb-pub-detail").value = "";
+      alert("Event published successfully!");
+      refreshData();
+    }
+
+    // --- Cognito ---
+    function renderCognito() {
+      const container = document.getElementById("cognito-view-container");
+      const pools = dataCache.cognito ? dataCache.cognito.pools || [] : [];
+
+      if (cognitoActivePool) {
+        const pool = pools.find(p => p.id === cognitoActivePool);
+        if (!pool) {
+          cognitoActivePool = null;
+          renderCognito();
+          return;
+        }
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="cognitoActivePool = null; renderCognito()">&larr; Back to User Pools</span>
+            <h2>UserPool: ${pool.name} (<code>${pool.id}</code>)</h2>
+            
+            <h3 style="margin-top: 20px;">Users</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Status</th>
+                    <th>Attributes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(pool.users || []).length === 0 ? '<tr><td colspan="3" class="empty-state">No users in this pool</td></tr>' : ''}
+                  ${(pool.users || []).map(u => `
+                    <tr>
+                      <td><b>${u.username}</b></td>
+                      <td><code>${u.userStatus}</code></td>
+                      <td>
+                        <ul style="margin: 0; padding-left: 16px;">
+                          ${(u.attributes || []).map(attr => `
+                            <li><code>${attr.name}</code> = <code>${attr.value}</code></li>
+                          `).join("")}
+                        </ul>
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (pools.length === 0) {
+        container.innerHTML = `<div class="empty-state">No Cognito User Pools created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${pools.map(p => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${p.name} (<code>${p.id}</code>)</span>
+                <span class="resource-meta">Users count: ${(p.users || []).length}</span>
+              </div>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="cognitoActivePool = '${p.id}'; renderCognito()">Browse Users</button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // --- CloudWatch Logs ---
+    function renderCloudWatch() {
+      const container = document.getElementById("cw-view-container");
+      const groups = dataCache.cloudwatch ? dataCache.cloudwatch.groups || [] : [];
+
+      if (cwActiveStream) {
+        // Find stream
+        let activeGroup = null;
+        let activeStr = null;
+        for (const g of groups) {
+          const str = (g.streams || []).find(s => s.name === cwActiveStream);
+          if (str) {
+            activeGroup = g;
+            activeStr = str;
+            break;
+          }
+        }
+
+        if (!activeStr) {
+          cwActiveStream = null;
+          renderCloudWatch();
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="cwActiveStream = null; renderCloudWatch()">&larr; Back to Streams of ${activeGroup.name}</span>
+            <h2>Log Stream: ${activeStr.name}</h2>
+            <div style="background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: var(--mono); font-size: 12px; max-height: 400px; overflow-y: auto; color: #38bdf8;">
+              ${(activeStr.events || []).length === 0 ? '<div style="color: var(--text-dim);">No log events</div>' : ''}
+              ${(activeStr.events || []).map(evt => {
+                const date = new Date(evt.timestamp).toLocaleTimeString();
+                return `<div>[${date}] ${evt.message}</div>`;
+              }).join("")}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (cwActiveGroup) {
+        const group = groups.find(g => g.name === cwActiveGroup);
+        if (!group) {
+          cwActiveGroup = null;
+          renderCloudWatch();
+          return;
+        }
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="cwActiveGroup = null; renderCloudWatch()">&larr; Back to Log Groups</span>
+            <h2>Log Group: ${group.name}</h2>
+            <h3 style="margin-top: 20px;">Streams</h3>
+            <div class="resource-list">
+              ${(group.streams || []).length === 0 ? '<div class="empty-state">No log streams in this group</div>' : ''}
+              ${(group.streams || []).map(s => `
+                <div class="resource-card">
+                  <div class="resource-details">
+                    <span class="resource-name">${s.name}</span>
+                    <span class="resource-meta">Events count: ${(s.events || []).length}</span>
+                  </div>
+                  <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="cwActiveStream = '${s.name}'; renderCloudWatch()">View Logs</button>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (groups.length === 0) {
+        container.innerHTML = `<div class="empty-state">No CloudWatch Log Groups registered yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${groups.map(g => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${g.name}</span>
+                <span class="resource-meta">Streams count: ${(g.streams || []).length}</span>
+              </div>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="cwActiveGroup = '${g.name}'; renderCloudWatch()">Browse Streams</button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // --- RDS ---
+    function renderRDS() {
+      const container = document.getElementById("rds-instance-rows");
+      const insts = dataCache.rds ? dataCache.rds.instances || [] : [];
+      if (insts.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="empty-state">No DB instances created yet</td></tr>`;
+        return;
+      }
+      container.innerHTML = insts.map(i => `
+        <tr>
+          <td><b>${i.DBInstanceIdentifier}</b></td>
+          <td><code>${i.Engine}</code></td>
+          <td><code>${i.Address}</code></td>
+          <td><code>${i.DBName || 'default'}</code></td>
+          <td><span style="color: var(--green);">${i.DBInstanceStatus}</span></td>
+        </tr>
+      `).join("");
+    }
+
+    // --- Step Functions ---
+    function renderStepFunctions() {
+      const container = document.getElementById("sf-view-container");
+      const machines = dataCache.stepfunctions ? dataCache.stepfunctions.stateMachines || [] : [];
+      const executions = dataCache.stepfunctions ? dataCache.stepfunctions.executions || [] : [];
+
+      if (sfActiveMachine) {
+        const sm = machines.find(m => m.stateMachineArn === sfActiveMachine);
+        if (!sm) {
+          sfActiveMachine = null;
+          renderStepFunctions();
+          return;
+        }
+
+        const smExecutions = executions.filter(e => e.stateMachineArn === sm.stateMachineArn);
+
+        container.innerHTML = `
+          <div class="explorer-view">
+            <span class="back-link" onclick="sfActiveMachine = null; renderStepFunctions()">&larr; Back to State Machines</span>
+            <h2>State Machine: ${sm.name}</h2>
+            <p>ARN: <code>${sm.stateMachineArn}</code></p>
+            <p>Definition ASL:</p>
+            <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 11px; max-height: 200px; overflow-y: auto;"><code>${sm.definition}</code></pre>
+
+            <h3 style="margin-top: 20px;">Executions</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Execution Name</th>
+                    <th>Status</th>
+                    <th>Start Date</th>
+                    <th>Output</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${smExecutions.length === 0 ? '<tr><td colspan="4" class="empty-state">No executions yet</td></tr>' : ''}
+                  ${smExecutions.map(e => `
+                    <tr>
+                      <td><b>${e.name}</b></td>
+                      <td><span style="color: ${e.status === 'SUCCEEDED' ? 'var(--green)' : e.status === 'RUNNING' ? 'var(--accent)' : 'var(--red)'}">${e.status}</span></td>
+                      <td>${new Date(e.startDate * 1000).toLocaleString()}</td>
+                      <td><pre style="margin: 0; font-size: 11px;"><code>${e.output || 'None'}</code></pre></td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (machines.length === 0) {
+        container.innerHTML = `<div class="empty-state">No State Machines created yet</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="resource-list">
+          ${machines.map(m => `
+            <div class="resource-card">
+              <div class="resource-details">
+                <span class="resource-name">${m.name}</span>
+                <span class="resource-meta">ARN: ${m.stateMachineArn}</span>
+              </div>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="sfActiveMachine = '${m.stateMachineArn}'; renderStepFunctions()">View Machine</button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // Event listener for search
+    serviceSearch.addEventListener("input", (e) => {
+      serviceSearchQuery = e.target.value;
+      renderSidebar();
+    });
+
+    // Start Polling
+    refreshData();
+    setInterval(refreshData, 3000);
+  </script>
+</body>
+</html>

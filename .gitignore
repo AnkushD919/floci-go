@@ -1,0 +1,25 @@
+# Binaries and build artifacts
+bin/
+/floci
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local isolated Docker credentials
+.docker/
+
+# Test & coverage artifacts
+*.out
+*.test
+coverage.txt
+
+# Local runtime data
+data/
+*.db
+
+# IDE & OS files
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
